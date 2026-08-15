@@ -1,0 +1,267 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/public-sans';
+
+/* ---------------------------------------------------------------------------
+   Design tokens. Warm tabletop palette — felt, wood, bone dice. Each rule set
+   gets its own accent (§2.1), but the label always says which one you're in;
+   colour never carries the meaning on its own (§8).
+   ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  --c-bg: #f6efe3;
+  --c-bg-deep: #ece1cf;
+  --c-surface: #fffcf6;
+  --c-surface-2: #f3e9d8;
+  --c-line: #ddceb4;
+  --c-ink: #2a1e12;
+  --c-muted: #6d5c46;
+
+  --c-accent: #a8331d;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #f7e0d8;
+  --c-accent-line: #e2b8ab;
+
+  --c-good: #1f6b46;
+  --c-good-soft: #dcefe2;
+  --c-warn: #8a5a00;
+  --c-warn-soft: #fbeed0;
+
+  --c-die: #fffdf7;
+  --c-die-pip: #2a1e12;
+  --c-die-edge: #cbb894;
+}
+
+:root.rules-janes {
+  --c-accent: #1c5f4a;
+  --c-accent-soft: #d9ece3;
+  --c-accent-line: #a5cbbb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --c-bg: #171009;
+    --c-bg-deep: #100b06;
+    --c-surface: #241a11;
+    --c-surface-2: #2f2318;
+    --c-line: #43331f;
+    --c-ink: #f6ead8;
+    --c-muted: #b7a184;
+
+    --c-accent: #e8674a;
+    --c-accent-ink: #2a1e12;
+    --c-accent-soft: #3b2117;
+    --c-accent-line: #6d3626;
+
+    --c-good: #6bc494;
+    --c-good-soft: #1c2f24;
+    --c-warn: #e0b45f;
+    --c-warn-soft: #33260f;
+
+    --c-die: #f4ead6;
+    --c-die-pip: #241a11;
+    --c-die-edge: #8d795a;
+  }
+
+  :root.rules-janes:not([data-theme='light']) {
+    --c-accent: #58c39b;
+    --c-accent-soft: #14302a;
+    --c-accent-line: #2b6553;
+  }
+}
+
+:root[data-theme='dark'] {
+  --c-bg: #171009;
+  --c-bg-deep: #100b06;
+  --c-surface: #241a11;
+  --c-surface-2: #2f2318;
+  --c-line: #43331f;
+  --c-ink: #f6ead8;
+  --c-muted: #b7a184;
+
+  --c-accent: #e8674a;
+  --c-accent-ink: #2a1e12;
+  --c-accent-soft: #3b2117;
+  --c-accent-line: #6d3626;
+
+  --c-good: #6bc494;
+  --c-good-soft: #1c2f24;
+  --c-warn: #e0b45f;
+  --c-warn-soft: #33260f;
+
+  --c-die: #f4ead6;
+  --c-die-pip: #241a11;
+  --c-die-edge: #8d795a;
+}
+
+:root[data-theme='dark'].rules-janes {
+  --c-accent: #58c39b;
+  --c-accent-soft: #14302a;
+  --c-accent-line: #2b6553;
+}
+
+@theme {
+  --color-bg: var(--c-bg);
+  --color-bg-deep: var(--c-bg-deep);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-line: var(--c-line);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-accent: var(--c-accent);
+  --color-accent-ink: var(--c-accent-ink);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-accent-line: var(--c-accent-line);
+  --color-good: var(--c-good);
+  --color-good-soft: var(--c-good-soft);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
+
+  --font-sans: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', ui-serif, Georgia, serif;
+
+  --radius-die: 22%;
+}
+
+html {
+  background: var(--c-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 60% at 50% 0%, color-mix(in oklab, var(--c-accent) 7%, transparent), transparent 70%),
+    var(--c-bg);
+  color: var(--c-ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 0, 'WONK' 1;
+  letter-spacing: -0.015em;
+}
+
+/* Tabular numerals everywhere a score can change under you. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes die-tumble {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  30% {
+    transform: translateY(-14%) rotate(-13deg) scale(1.04);
+  }
+  60% {
+    transform: translateY(4%) rotate(9deg) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+.die-rolling {
+  animation: die-tumble 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pop-in {
+  animation: pop-in 220ms ease-out;
+}
+
+@keyframes shake-out {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.shake-out {
+  animation: shake-out 420ms ease-in-out;
+}
+
+.prose-article {
+  max-width: 65ch;
+}
+
+.prose-article p {
+  margin: 0 0 1.15em;
+  line-height: 1.7;
+}
+
+.prose-article h2 {
+  margin: 2em 0 0.5em;
+  font-size: 1.4rem;
+}
+
+.prose-article h3 {
+  margin: 1.6em 0 0.4em;
+  font-size: 1.1rem;
+}
+
+.prose-article a {
+  color: var(--c-accent);
+  text-underline-offset: 3px;
+  text-decoration: underline;
+}
+
+.prose-article ul {
+  margin: 0 0 1.15em;
+  padding-left: 1.25em;
+  list-style: disc;
+}
+
+.prose-article li {
+  margin-bottom: 0.4em;
+}
