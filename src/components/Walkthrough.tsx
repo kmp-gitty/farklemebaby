@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { STANDARD, type DieFace, type RuleSet } from '../lib/rules';
+import type { DieFace, RuleSet } from '../lib/rules';
 import { formatScore } from '../lib/game';
+import { WALKTHROUGHS } from '../lib/walkthroughs';
 import {
   bank,
   bankableTotal,
@@ -21,53 +22,25 @@ import {
 } from './TurnBoard';
 
 /**
- * A real solo turn with a coach layer. The dice are scripted so the round can
- * reach hot dice and a farkle on purpose — §6.2 says that's the one place fixed
- * dice are acceptable, as long as we say so.
+ * A real solo turn with a coach layer, in whichever rule set you're in. The
+ * dice are scripted so the round can reach hot dice and a farkle on purpose —
+ * §6.2 says that's the one place fixed dice are acceptable, as long as we say so.
  */
-const SCRIPT: number[][] = [
-  [1, 5, 2, 3, 4, 6], // roll 1 — two scoring dice, take only one
-  [4, 4, 4, 1, 5], // roll 2 — everything scores → hot dice
-  [3, 3, 3, 2, 4, 6], // roll 3 — the bank-or-roll decision
-  [2, 3, 4], // roll 4 — farkle
-];
-
-const COACH: Record<number, { before: string; after?: string }> = {
-  1: {
-    before:
-      'Six dice. Only the 1 and the 5 score here — the 2, 3, 4 and 6 are dead. Tap the 1 to set it aside. You could take the 5 as well, but leaving it means five dice to reroll instead of four, and that is often the better bet.',
-    after: 'That 1 is worth 100, and it is safe for as long as you keep rolling.',
-  },
-  2: {
-    before:
-      'Triple 4s is 400, the 1 is another 100 and the 5 is 50. Take all five — every die on the table scores, which is worth doing here.',
-    after:
-      'All six dice have now been set aside, so you get the whole cup back and keep the 650. That is hot dice.',
-  },
-  3: {
-    before:
-      'Triple 3s would put you on 950 for the turn. This is the real Farkle decision: bank 950 now, or set the 3s aside and roll the last three dice for more.',
-    after: 'Rolling on with three dice. Anything that scores keeps the turn alive.',
-  },
-  4: {
-    before: 'Nothing here scores.',
-    after:
-      'That is a farkle: 2, 3 and 4 with no 1 and no 5. The entire 950 is gone and the turn is over. Banking at 950 would have been the safe call — knowing when to stop is the whole game.',
-  },
-};
-
 export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => void }) {
-  // The guided round teaches Standard; Jane's is the same flow, different scoring.
-  const teaching = STANDARD;
-  const [turn, setTurn] = useState<TurnState>(() => startTurn(teaching, () => SCRIPT[0] as DieFace[]));
+  const script = WALKTHROUGHS[rules.id];
+  const [turn, setTurn] = useState<TurnState>(() =>
+    startTurn(rules, () => script.rolls[0] as DieFace[]),
+  );
   const [ended, setEnded] = useState<null | { reason: 'banked' | 'farkled'; points: number }>(null);
 
-  const step = COACH[turn.rollNumber];
-  const valid = canCommit(teaching, turn);
+  const step = script.coach[turn.rollNumber];
+  const valid = canCommit(rules, turn);
 
   const advance = () => {
-    const next = rollOn(teaching, turn, (count) => {
-      const scripted = SCRIPT[turn.rollNumber] ?? [];
+    const next = rollOn(rules, turn, (count) => {
+      // If the player deviates from the suggested selection the scripted roll
+      // won't fit, so trim it rather than throwing the round away.
+      const scripted = script.rolls[turn.rollNumber] ?? [];
       return (scripted.length === count ? scripted : scripted.slice(0, count)) as DieFace[];
     });
     if (!next) return;
@@ -76,11 +49,13 @@ export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => v
   };
 
   const takeTheMoney = () => {
-    const banked = bank(teaching, turn);
+    const banked = bank(rules, turn);
     if (!banked) return;
     setTurn(banked.turn);
     setEnded({ reason: 'banked', points: banked.points });
   };
+
+  const lastCoachStep = script.coach[Object.keys(script.coach).length];
 
   return (
     <div className="space-y-4">
@@ -93,14 +68,8 @@ export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => v
 
       <Callout tone="warn" title="We've stacked the dice for this demo">
         These rolls are scripted so the round can show you hot dice and a farkle on purpose. Real
-        games roll honestly.
-        {rules.id === 'janes' ? (
-          <>
-            {' '}
-            The guided round teaches <strong>Standard</strong> (6 dice) — Jane's turn works exactly
-            the same way, she just scores differently.
-          </>
-        ) : null}
+        games roll honestly. You're being taught <strong>{rules.name}</strong> — {rules.diceCount}{' '}
+        dice.
       </Callout>
 
       {step && !ended ? (
@@ -110,19 +79,19 @@ export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => v
       ) : null}
 
       <SetAsideTray turn={turn} />
-      {turn.hotDice && turn.status === 'live' ? <HotDiceCallout rules={teaching} /> : null}
-      <RunningTotal rules={teaching} turn={turn} />
+      {turn.hotDice && turn.status === 'live' ? <HotDiceCallout rules={rules} /> : null}
+      <RunningTotal rules={rules} turn={turn} />
       {turn.status === 'farkled' ? <FarkleCallout lost={turn.runningTotal} /> : null}
 
       <ActiveDice
-        rules={teaching}
+        rules={rules}
         turn={turn}
         onToggle={(dieIndex) => setTurn(toggleDie(turn, dieIndex))}
         hints
         rolling={false}
       />
 
-      <SelectionReadout rules={teaching} turn={turn} />
+      <SelectionReadout rules={rules} turn={turn} />
 
       {ended ? (
         <Card className="space-y-3">
@@ -134,13 +103,13 @@ export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => v
           <p className="text-[15px]">
             {ended.reason === 'banked'
               ? 'Exactly right: taking a good total off the table is how games are won. Roll after roll, the odds catch up with everyone.'
-              : COACH[4].after}
+              : lastCoachStep?.after}
           </p>
           {ended.reason === 'banked' ? (
             <Callout tone="warn" title="The farkle you just dodged">
-              Those last three dice were scripted to come up 2, 3, 4 — no 1, no 5, no triple.
-              Nothing scores, so the whole {formatScore(ended.points)} would have gone back in the
-              box. That's a farkle.
+              Those last dice were scripted to come up {script.finalRollWords} — no 1, no 5, no
+              triplet. Nothing scores, so the whole {formatScore(ended.points)} would have gone back
+              in the box.
             </Callout>
           ) : null}
           <p className="text-[15px] text-muted">
@@ -157,13 +126,15 @@ export function Walkthrough({ rules, onExit }: { rules: RuleSet; onExit: () => v
             Roll again
           </Button>
           <Button size="lg" onClick={takeTheMoney} disabled={!valid}>
-            Bank {valid ? formatScore(bankableTotal(teaching, turn)) : ''}
+            Bank {valid ? formatScore(bankableTotal(rules, turn)) : ''}
           </Button>
         </div>
       )}
 
-      {turn.rollNumber > 1 && !ended && COACH[turn.rollNumber - 1]?.after ? (
-        <p className="text-center text-[15px] text-muted">{COACH[turn.rollNumber - 1].after}</p>
+      {turn.rollNumber > 1 && !ended && script.coach[turn.rollNumber - 1]?.after ? (
+        <p className="text-center text-[15px] text-muted">
+          {script.coach[turn.rollNumber - 1].after}
+        </p>
       ) : null}
     </div>
   );

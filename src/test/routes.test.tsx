@@ -49,10 +49,14 @@ describe('the rule set is obvious from every page', () => {
 
   it('switches to the equivalent page, not the home page', () => {
     renderAt('/score');
-    const switcher = screen.getByRole('group', { name: 'Rule set' });
-    expect(within(switcher).getByRole('link', { name: "Jane's" })).toHaveAttribute(
+    const switcher = screen.getAllByRole('group', { name: 'Rule set' })[0];
+    expect(within(switcher).getByRole('link', { name: "Jane's Rules" })).toHaveAttribute(
       'href',
       '/janes/score',
+    );
+    expect(within(switcher).getByRole('link', { name: 'Standard Rules' })).toHaveAttribute(
+      'aria-current',
+      'true',
     );
   });
 });

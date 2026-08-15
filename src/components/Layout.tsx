@@ -51,14 +51,16 @@ function ThemeToggle() {
   );
 }
 
-function RuleSetSwitcher() {
+function RuleSetSwitcher({ full = false }: { full?: boolean }) {
   const rules = useRuleSet();
   const { pathname } = useLocation();
   const suffix = suffixOf(pathname);
 
   return (
     <div
-      className="inline-flex rounded-full border-2 border-line bg-surface-2 p-1"
+      className={`rounded-full border-2 border-line bg-surface-2 p-1 ${
+        full ? 'grid grid-cols-2' : 'inline-flex'
+      }`}
       role="group"
       aria-label="Rule set"
     >
@@ -69,11 +71,11 @@ function RuleSetSwitcher() {
             key={option.id}
             to={pathIn(option, suffix)}
             aria-current={current ? 'true' : undefined}
-            className={`min-h-9 rounded-full px-3 py-1 text-[15px] font-semibold no-underline transition-colors ${
-              current ? 'bg-accent text-accent-ink' : 'text-muted'
-            }`}
+            className={`flex items-center justify-center rounded-full px-3 py-1 text-center font-semibold no-underline transition-colors ${
+              full ? 'min-h-10 text-[16px]' : 'min-h-9 text-[15px]'
+            } ${current ? 'bg-accent text-accent-ink' : 'text-muted'}`}
           >
-            {option.shortName}
+            {option.name}
           </Link>
         );
       })}
@@ -120,8 +122,16 @@ export function Layout() {
             </ul>
           </nav>
 
-          <RuleSetSwitcher />
+          <div className="hidden md:block">
+            <RuleSetSwitcher />
+          </div>
           <ThemeToggle />
+        </div>
+
+        {/* On a phone the switcher gets its own full-width row — it has to be
+            unmissable, and both rule sets need their whole name (§2.1). */}
+        <div className="px-3 pb-2 md:hidden">
+          <RuleSetSwitcher full />
         </div>
 
         {/* The active rule set, spelled out — never colour alone (§8). */}
