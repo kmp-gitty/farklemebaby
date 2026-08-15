@@ -119,6 +119,47 @@ describe('/dice', () => {
     expect(screen.getByLabelText('Scoring help')).not.toBeChecked();
   });
 
+  /** Seed the page's persisted state so the dice aren't random. */
+  function seedDice(state: Record<string, unknown>) {
+    window.localStorage.setItem(
+      'farkle:standard:dice',
+      JSON.stringify({ v: 1, data: { count: 6, history: [], hints: true, ...state } }),
+    );
+  }
+
+  it('calls a farkle when the whole roll is dead', () => {
+    seedDice({ dice: [2, 3, 4, 6, 2, 3], held: [], lastRolled: [0, 1, 2, 3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.getByRole('heading', { name: 'Farkle.' })).toBeInTheDocument();
+  });
+
+  it('calls a farkle on the thrown dice even while scoring dice are held', () => {
+    // Three 1s held from an earlier roll, then 2-3-4 thrown. The held dice are
+    // still worth 300 — but the throw scores nothing, so it is a farkle.
+    seedDice({ dice: [1, 1, 1, 2, 3, 4], held: [0, 1, 2], lastRolled: [3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.getByRole('heading', { name: 'Farkle.' })).toBeInTheDocument();
+    expect(screen.getByText(/everything set aside this turn would be lost/)).toBeInTheDocument();
+    // The held dice still report their own value.
+    expect(screen.getByLabelText('Held dice score: 300')).toBeInTheDocument();
+  });
+
+  it('does not call a farkle when the thrown dice score', () => {
+    seedDice({ dice: [1, 1, 1, 5, 3, 4], held: [0, 1, 2], lastRolled: [3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.queryByRole('heading', { name: 'Farkle.' })).not.toBeInTheDocument();
+  });
+
+  it('judges the farkle on what was thrown, not on holds changed afterwards', async () => {
+    const user = userEvent.setup();
+    // The 2, 3 and 4 were thrown and score nothing. Holding one of them after
+    // the fact must not make the farkle disappear.
+    seedDice({ dice: [1, 1, 1, 2, 3, 4], held: [0, 1, 2], lastRolled: [3, 4, 5] });
+    renderAt('/dice');
+    await user.click(screen.getByRole('button', { name: /^Die showing 2/ }));
+    expect(screen.getByRole('heading', { name: 'Farkle.' })).toBeInTheDocument();
+  });
+
   it('keeps 11 dice within a 375px tray', async () => {
     const user = userEvent.setup();
     renderAt('/janes/dice');

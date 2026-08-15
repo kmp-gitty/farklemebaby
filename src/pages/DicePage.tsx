@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRuleSet } from '../context/RuleSetContext';
 import { MAX_DICE, type DieFace } from '../lib/rules';
 import { rollDice } from '../lib/dice';
-import { bestPossible, describeBreakdown, scoreSelection, scoringDiceIndices } from '../lib/scoring';
+import {
+  bestPossible,
+  describeBreakdown,
+  isFarkle,
+  scoreSelection,
+  scoringDiceIndices,
+} from '../lib/scoring';
 import { usePersistentState } from '../lib/usePersistentState';
 import { keys } from '../lib/storage';
 import { DiceTray } from '../components/DiceTray';
@@ -14,6 +20,8 @@ type DiceState = {
   count: number;
   dice: DieFace[];
   held: number[];
+  /** Indices thrown by the most recent roll — the ones a farkle is judged on. */
+  lastRolled?: number[];
   history: DieFace[][];
   hints: boolean;
 };
@@ -37,13 +45,19 @@ export function DicePage() {
     setRolling(true);
     setState((current) => {
       const next: DieFace[] = [];
+      const rolled: number[] = [];
       for (let index = 0; index < current.count; index++) {
         const heldFace = current.held.includes(index) ? current.dice[index] : undefined;
+        if (heldFace === undefined) rolled.push(index);
         next.push(heldFace ?? rollDice(1)[0]);
       }
       return {
         ...current,
         dice: next,
+        // Whether it's a farkle depends on the dice that were actually thrown,
+        // not on what's held now — so remember them rather than recomputing
+        // from the current holds, which the player can change afterwards.
+        lastRolled: rolled,
         history: [next, ...current.history].slice(0, 10),
       };
     });
@@ -55,8 +69,12 @@ export function DicePage() {
 
   useEffect(() => {
     if (rolling || state.dice.length === 0) return;
-    setAnnouncement(`Rolled ${state.dice.join(', ')}`);
-  }, [rolling, state.dice]);
+    const thrown = (state.lastRolled ?? state.dice.map((_, index) => index))
+      .map((index) => state.dice[index])
+      .filter(Boolean);
+    const nothing = state.hints && thrown.length > 0 && isFarkle(rules, thrown);
+    setAnnouncement(`Rolled ${state.dice.join(', ')}${nothing ? ' — nothing scores. Farkle.' : ''}`);
+  }, [rolling, rules, state.dice, state.hints, state.lastRolled]);
 
   const toggleHold = (index: number) => {
     setState((current) => ({
@@ -92,6 +110,14 @@ export function DicePage() {
   const holdScoringDice = () => {
     setState((current) => ({ ...current, held: scoringDiceIndices(rules, current.dice) }));
   };
+
+  // A farkle is about the dice that were just thrown. With nothing held that's
+  // the whole roll; with dice held it's only the rest — which is exactly the
+  // case the tile used to miss, because the held dice still had a score.
+  const thrownFaces = (state.lastRolled ?? state.dice.map((_, index) => index))
+    .map((index) => state.dice[index])
+    .filter(Boolean);
+  const farkled = thrownFaces.length > 0 && isFarkle(rules, thrownFaces);
 
   useShakeToRoll(roll);
 
@@ -183,6 +209,20 @@ export function DicePage() {
 
       {state.hints && state.dice.length > 0 ? (
         <Card className="space-y-3">
+          {farkled ? (
+            <div
+              role="status"
+              className="pop-in rounded-2xl border-2 border-accent bg-accent-soft p-3.5 text-center"
+            >
+              <h2 className="font-display text-2xl font-semibold">Farkle.</h2>
+              <p className="mt-1 text-[15px]">
+                {state.held.length > 0
+                  ? 'Nothing in the dice you just threw scores. In a game the turn would end here and everything set aside this turn would be lost.'
+                  : `Nothing in that roll scores under ${rules.name}. In a game the turn would end here.`}
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-baseline gap-2">
             <h2 className="font-display text-xl font-semibold">
               {heldResult ? 'Holding' : 'Best available'}
@@ -209,10 +249,8 @@ export function DicePage() {
             </>
           ) : best && best.points > 0 ? (
             <ScoreBreakdown result={best} />
-          ) : (
-            <p className="text-[15px] text-muted">
-              Nothing scores under {rules.name}. That's a farkle at the table.
-            </p>
+          ) : farkled ? null : (
+            <p className="text-[15px] text-muted">Nothing here scores under {rules.name}.</p>
           )}
 
           <div className="flex flex-wrap gap-2">
