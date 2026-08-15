@@ -69,11 +69,16 @@ export function DicePage() {
 
   useEffect(() => {
     if (rolling || state.dice.length === 0) return;
-    const thrown = (state.lastRolled ?? state.dice.map((_, index) => index))
-      .map((index) => state.dice[index])
-      .filter(Boolean);
-    const nothing = state.hints && thrown.length > 0 && isFarkle(rules, thrown);
-    setAnnouncement(`Rolled ${state.dice.join(', ')}${nothing ? ' — nothing scores. Farkle.' : ''}`);
+    const rolled = state.lastRolled ?? state.dice.map((_, index) => index);
+    const thrown = rolled.map((index) => state.dice[index]).filter(Boolean);
+    const carried = state.dice.filter((_, index) => !rolled.includes(index));
+    const nothing = thrown.length > 0 && isFarkle(rules, thrown);
+    const hot =
+      thrown.length > 0 &&
+      scoreSelection(rules, thrown) !== null &&
+      (carried.length === 0 || scoreSelection(rules, carried) !== null);
+    const verdict = !state.hints ? '' : nothing ? ' — nothing scores. Farkle.' : hot ? ' — hot dice, every die scores.' : '';
+    setAnnouncement(`Rolled ${state.dice.join(', ')}${verdict}`);
   }, [rolling, rules, state.dice, state.hints, state.lastRolled]);
 
   const toggleHold = (index: number) => {
@@ -114,10 +119,25 @@ export function DicePage() {
   // A farkle is about the dice that were just thrown. With nothing held that's
   // the whole roll; with dice held it's only the rest — which is exactly the
   // case the tile used to miss, because the held dice still had a score.
-  const thrownFaces = (state.lastRolled ?? state.dice.map((_, index) => index))
-    .map((index) => state.dice[index])
-    .filter(Boolean);
+  const lastRolled = state.lastRolled ?? state.dice.map((_, index) => index);
+  const thrownFaces = lastRolled.map((index) => state.dice[index]).filter(Boolean);
+  const carriedFaces = state.dice.filter((_, index) => !lastRolled.includes(index));
   const farkled = thrownFaces.length > 0 && isFarkle(rules, thrownFaces);
+
+  // Hot dice: every die on the table can legitimately be set aside. Judged one
+  // roll at a time — the dice carried in from earlier rolls have to stand on
+  // their own, because combinations never span a roll. Three 3s carried in plus
+  // a fourth 3 thrown is NOT four-of-a-kind, and so is not hot dice.
+  const hotDice =
+    thrownFaces.length > 0 &&
+    scoreSelection(rules, thrownFaces) !== null &&
+    (carriedFaces.length === 0 || scoreSelection(rules, carriedFaces) !== null);
+
+  // Held dice drawn from more than one roll can't be read as a single
+  // combination at a real table, so say so rather than quietly implying it.
+  const heldSpansRolls =
+    state.held.some((index) => lastRolled.includes(index)) &&
+    state.held.some((index) => !lastRolled.includes(index));
 
   useShakeToRoll(roll);
 
@@ -223,6 +243,20 @@ export function DicePage() {
             </div>
           ) : null}
 
+          {hotDice ? (
+            <div
+              role="status"
+              className="pop-in rounded-2xl border-2 border-[var(--c-good)] bg-[var(--c-good-soft)] p-3.5 text-center"
+            >
+              <h2 className="font-display text-2xl font-semibold">Hot dice!</h2>
+              <p className="mt-1 text-[15px]">
+                Every die on the table scores. Set them all aside and you roll all{' '}
+                {state.dice.length} again, keeping your running total — as many times as it keeps
+                happening.
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-baseline gap-2">
             <h2 className="font-display text-xl font-semibold">
               {heldResult ? 'Holding' : 'Best available'}
@@ -241,6 +275,12 @@ export function DicePage() {
           {heldResult ? (
             <>
               <ScoreBreakdown result={heldResult} dead={heldDead} />
+              {heldSpansRolls ? (
+                <p className="text-[14px] text-muted">
+                  You're holding dice from more than one roll. At a real table each roll scores on
+                  its own, so this total reads them as one set and may be generous.
+                </p>
+              ) : null}
               {best && best.points > heldResult.points ? (
                 <p className="text-[14px] text-muted">
                   The whole roll is worth {formatScore(best.points)} — {describeBreakdown(best)}.

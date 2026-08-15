@@ -150,6 +150,43 @@ describe('/dice', () => {
     expect(screen.queryByRole('heading', { name: 'Farkle.' })).not.toBeInTheDocument();
   });
 
+  it('calls hot dice when every die on the table scores', () => {
+    seedDice({ dice: [1, 1, 1, 5, 5, 5], held: [], lastRolled: [0, 1, 2, 3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.getByRole('heading', { name: 'Hot dice!' })).toBeInTheDocument();
+    expect(screen.getByText(/roll all 6 again/)).toBeInTheDocument();
+  });
+
+  it('does not call hot dice when a die is dead', () => {
+    seedDice({ dice: [1, 1, 1, 5, 5, 3], held: [], lastRolled: [0, 1, 2, 3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.queryByRole('heading', { name: 'Hot dice!' })).not.toBeInTheDocument();
+  });
+
+  it('judges hot dice one roll at a time, never across the boundary', () => {
+    // Three 3s carried in from an earlier roll, a fourth 3 and two 6s thrown.
+    // Read as one pile that is four-of-a-kind plus a pair — 1,500 in Standard —
+    // but the throw itself is 3-6-6, which scores nothing. Not hot dice.
+    seedDice({ dice: [3, 3, 3, 3, 6, 6], held: [0, 1, 2], lastRolled: [3, 4, 5] });
+    renderAt('/dice');
+    expect(screen.queryByRole('heading', { name: 'Hot dice!' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Farkle.' })).toBeInTheDocument();
+  });
+
+  it('calls hot dice when carried dice and thrown dice each score on their own', () => {
+    // Two 5s carried in (100), one 5 thrown (50). Every die is legitimately set
+    // aside, so the cup comes back — even though it is not three-of-a-kind.
+    seedDice({ dice: [5, 5, 5], count: 3, held: [0, 1], lastRolled: [2] });
+    renderAt('/dice');
+    expect(screen.getByRole('heading', { name: 'Hot dice!' })).toBeInTheDocument();
+  });
+
+  it('warns when held dice come from more than one roll', () => {
+    seedDice({ dice: [5, 5, 5], count: 3, held: [0, 1, 2], lastRolled: [2] });
+    renderAt('/dice');
+    expect(screen.getByText(/holding dice from more than one roll/)).toBeInTheDocument();
+  });
+
   it('judges the farkle on what was thrown, not on holds changed afterwards', async () => {
     const user = userEvent.setup();
     // The 2, 3 and 4 were thrown and score nothing. Holding one of them after
