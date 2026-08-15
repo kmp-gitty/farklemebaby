@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
+import { STANDARD } from '../lib/rules';
+import { bestPossible, scoreSelection } from '../lib/scoring';
 
 function renderAt(path: string) {
   return render(
@@ -70,8 +72,51 @@ describe('/dice', () => {
     expect(screen.getAllByRole('button', { name: /^Die showing/ })).toHaveLength(11);
     expect(screen.queryByText(/Best available/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('Show scoring hints'));
+    await user.click(screen.getByLabelText('Scoring help'));
     expect(screen.getByText(/Best available/)).toBeInTheDocument();
+  });
+
+  it('scores the dice you are holding, combination by combination', async () => {
+    const user = userEvent.setup();
+    renderAt('/dice');
+    await user.click(screen.getByLabelText('Scoring help'));
+    await user.click(screen.getByRole('button', { name: 'Roll' }));
+
+    // Hold everything that scores, then read the total back.
+    await user.click(screen.getByRole('button', { name: 'Hold everything that scores' }));
+
+    const dice = screen.getAllByRole('button', { name: /^Die showing/ });
+    const held = dice.filter((die) => die.getAttribute('aria-pressed') === 'true');
+    const heldFaces = held.map((die) => Number(die.getAttribute('aria-label')!.match(/\d/)![0]));
+
+    const expected = bestPossible(STANDARD, heldFaces).points;
+    expect(expected).toBeGreaterThan(0);
+    expect(
+      screen.getByLabelText(`Held dice score: ${expected.toLocaleString('en-US')}`),
+    ).toBeInTheDocument();
+    // Every held die belongs to a combination, so nothing is called out as dead.
+    expect(screen.queryByText('Scoring nothing:')).not.toBeInTheDocument();
+  });
+
+  it('names the held dice that carry nothing', async () => {
+    const user = userEvent.setup();
+    renderAt('/dice');
+    await user.click(screen.getByLabelText('Scoring help'));
+    await user.click(screen.getByRole('button', { name: 'Roll' }));
+
+    // Hold every die — on six dice at least one is usually dead, but when the
+    // roll happens to score in full there is correctly nothing to report.
+    const dice = screen.getAllByRole('button', { name: /^Die showing/ });
+    for (const die of dice) await user.click(die);
+
+    const faces = dice.map((die) => Number(die.getAttribute('aria-label')!.match(/\d/)![0]));
+    const fullyScores = scoreSelection(STANDARD, faces) !== null;
+    expect(screen.queryByText('Scoring nothing:') !== null).toBe(!fullyScores);
+  });
+
+  it('leaves scoring help off by default', () => {
+    renderAt('/dice');
+    expect(screen.getByLabelText('Scoring help')).not.toBeChecked();
   });
 
   it('keeps 11 dice within a 375px tray', async () => {

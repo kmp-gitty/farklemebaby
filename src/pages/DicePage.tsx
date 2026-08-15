@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRuleSet } from '../context/RuleSetContext';
 import { MAX_DICE, type DieFace } from '../lib/rules';
 import { rollDice } from '../lib/dice';
-import { bestPossible, describeBreakdown, scoringDiceIndices } from '../lib/scoring';
+import { bestPossible, describeBreakdown, scoreSelection, scoringDiceIndices } from '../lib/scoring';
 import { usePersistentState } from '../lib/usePersistentState';
 import { keys } from '../lib/storage';
 import { DiceTray } from '../components/DiceTray';
-import { Button, Card, Callout, Pill } from '../components/ui';
+import { ScoreBreakdown, deadDice } from '../components/ScoreBreakdown';
+import { Button, Card, Pill } from '../components/ui';
 import { formatScore } from '../lib/game';
 
 type DiceState = {
@@ -80,6 +81,17 @@ export function DicePage() {
 
   const best = state.hints && state.dice.length > 0 ? bestPossible(rules, state.dice) : null;
   const hinted = state.hints && state.dice.length > 0 ? scoringDiceIndices(rules, state.dice) : [];
+
+  const heldFaces = state.held.map((index) => state.dice[index]).filter(Boolean);
+  // Score the held dice as a set. If they don't all belong to a combination,
+  // fall back to the best reading and name the ones carrying nothing.
+  const heldExact = heldFaces.length > 0 ? scoreSelection(rules, heldFaces) : null;
+  const heldResult = heldExact ?? (heldFaces.length > 0 ? bestPossible(rules, heldFaces) : null);
+  const heldDead = heldResult ? deadDice(heldFaces, heldResult) : [];
+
+  const holdScoringDice = () => {
+    setState((current) => ({ ...current, held: scoringDiceIndices(rules, current.dice) }));
+  };
 
   useShakeToRoll(roll);
 
@@ -169,12 +181,66 @@ export function DicePage() {
         )}
       </div>
 
-      {best ? (
-        <Callout tone="good" title={`Best available: ${formatScore(best.points)}`}>
-          {best.points === 0
-            ? `Nothing scores under ${rules.name}. That's a farkle at the table.`
-            : describeBreakdown(best)}
-        </Callout>
+      {state.hints && state.dice.length > 0 ? (
+        <Card className="space-y-3">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 className="font-display text-xl font-semibold">
+              {heldResult ? 'Holding' : 'Best available'}
+            </h2>
+            <span
+              className="tnum ml-auto font-display text-3xl font-semibold"
+              aria-live="polite"
+              aria-label={`${heldResult ? 'Held dice score' : 'Best available score'}: ${formatScore(
+                (heldResult ?? best)?.points ?? 0,
+              )}`}
+            >
+              {formatScore((heldResult ?? best)?.points ?? 0)}
+            </span>
+          </div>
+
+          {heldResult ? (
+            <>
+              <ScoreBreakdown result={heldResult} dead={heldDead} />
+              {best && best.points > heldResult.points ? (
+                <p className="text-[14px] text-muted">
+                  The whole roll is worth {formatScore(best.points)} — {describeBreakdown(best)}.
+                </p>
+              ) : null}
+            </>
+          ) : best && best.points > 0 ? (
+            <ScoreBreakdown result={best} />
+          ) : (
+            <p className="text-[15px] text-muted">
+              Nothing scores under {rules.name}. That's a farkle at the table.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={holdScoringDice}
+              disabled={!best || best.points === 0}
+            >
+              Hold everything that scores
+            </Button>
+            {state.held.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setState((current) => ({ ...current, held: [] }))}
+              >
+                Release all
+              </Button>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
+      {!state.hints && state.held.length > 0 ? (
+        <p className="text-center text-[14px] text-muted">
+          Turn on scoring help below to see what you're holding.
+        </p>
       ) : null}
 
       <div className="sticky bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 md:static">
@@ -193,7 +259,7 @@ export function DicePage() {
               setState((current) => ({ ...current, hints: event.target.checked }))
             }
           />
-          <span className="text-[15px] font-semibold">Show scoring hints</span>
+          <span className="text-[15px] font-semibold">Scoring help</span>
         </label>
         <Button variant="secondary" size="sm" onClick={reset} disabled={state.dice.length === 0}>
           Clear
